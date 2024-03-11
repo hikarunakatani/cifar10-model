@@ -1,0 +1,7 @@
+# install required libraries
+torch 
+torchvision
+matplotlib
+numpy
+tqdm
+tensorboard
