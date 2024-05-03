@@ -1,4 +1,4 @@
-name: Push Docker image to Amazon ECR
+name: Push Docker image to Amazon ECR (manual)
 
 on:
   workflow_dispatch:
