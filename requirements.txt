@@ -6,3 +6,4 @@ numpy
 tqdm
 tensorboard
 boto3
+zipfile
