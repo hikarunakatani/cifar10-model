@@ -10,6 +10,8 @@ from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 import model
 from model import MODEL_PATH
+import boto3
+from botocore.exceptions import ClientError
 
 # Preprocess data
 # Transform PIL Image to tensor
@@ -95,7 +97,9 @@ def train(lr, momentum, num_epochs):
             epoch_corrects = 0
 
             for input_data, label in tqdm(dataloaders_dict[phase]):
-                input_data, label = input_data.to(device), label.to(device) # Enable GPU
+                input_data, label = input_data.to(device), label.to(
+                    device
+                )  # Enable GPU
                 optimizer.zero_grad()
 
                 # compute gradient in training phase
@@ -128,6 +132,22 @@ def train(lr, momentum, num_epochs):
     writer.close()
 
     torch.save(net.state_dict(), MODEL_PATH)
+
+    upload_model()
+
+
+def upload_model():
+
+    s3_client = boto3.client("s3")
+    file_path = "model.pth"
+    bucket_name = "cifar10-mlops-bucket"
+    object_key = "model.pth"
+
+    try:
+        s3_client.upload_file(file_path, bucket_name, object_key)
+        print(f"Uploaded {file_path} to {bucket_name}/{object_key}")
+    except ClientError as e:
+        print(f"An error occurred while uploading {e}")
 
 
 def main():
