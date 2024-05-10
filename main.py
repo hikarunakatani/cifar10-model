@@ -10,57 +10,37 @@ from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 import model
 from model import MODEL_PATH
-
-# Preprocess data
-# Transform PIL Image to tensor
-# Normalize a tensor image in each channel with mean and standard deviation
-transform = transforms.Compose(
-    [transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
-)
-
-# Dataset directory
-data_dir = "./data"
-
-download_flag = False
-if not os.path.exists(os.path.join(data_dir, "cifar-10-batches-py")):
-    download_flag = True
-
-# Downaload training data of CIFAR-10
-trainset = torchvision.datasets.CIFAR10(
-    root="./data", train=True, download=download_flag, transform=transform
-)
-trainloader = torch.utils.data.DataLoader(
-    trainset, batch_size=4, shuffle=True, num_workers=os.cpu_count()
-)
-
-# Download validation data of CIFAR-10
-testset = torchvision.datasets.CIFAR10(
-    root="./data", train=False, download=download_flag, transform=transform
-)
-testloader = torch.utils.data.DataLoader(
-    testset, batch_size=4, shuffle=False, num_workers=os.cpu_count()
-)
-
-# combine as dictionary
-dataloaders_dict = {"train": trainloader, "val": testloader}
-
-classes = (
-    "plane",
-    "car",
-    "bird",
-    "cat",
-    "deer",
-    "dog",
-    "frog",
-    "horse",
-    "ship",
-    "truck",
-)
-
-writer = SummaryWriter("logs")
+import boto3
+from botocore.exceptions import ClientError
+import zipfile
 
 
-def train(lr, momentum, num_epochs):
+def download_data():
+    """download training data from Amazon S3 bucket
+       Used when run as a ECS task
+    """
+
+    s3 = boto3.client('s3')
+    bucket_name = 'cifar10-mlops-bucket'
+    file_key = 'data.zip'
+    local_file_path = 'data.zip'
+    extract_to = './'
+
+    # Download the file from S3
+    try:
+        s3.download_file(bucket_name, file_key, local_file_path)
+        print("File downloaded successfully.")
+
+        # Extract the contents of the zip file
+        with zipfile.ZipFile(local_file_path, 'r') as zip_ref:
+            zip_ref.extractall(extract_to)
+            print(f"Zip file extracted successfully to '{extract_to}'.")
+
+    except Exception as e:
+        print("Error:", e)
+
+
+def train(lr, momentum, num_epochs, env):
     """train the CNN model
 
     Args:
@@ -68,6 +48,59 @@ def train(lr, momentum, num_epochs):
         momentum (float): momentum used in model training
         num_epochs (int): number of epochs used in model training
     """
+
+    download_flag = False
+
+    # Dataset directory
+    data_dir = "./data"
+
+    if not os.path.exists(os.path.join(data_dir, "cifar-10-batches-py")):
+        if env == "local":
+            download_flag = True
+        elif env == "ecs":
+            download_data()
+
+    # Preprocess data
+    # Transform PIL Image to tensor
+    # Normalize a tensor image in each channel with mean and standard deviation
+    transform = transforms.Compose(
+        [transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+    )
+
+    # Downaload training data of CIFAR-10
+    trainset = torchvision.datasets.CIFAR10(
+        root="./data", train=True, download=download_flag, transform=transform
+    )
+    trainloader = torch.utils.data.DataLoader(
+        trainset, batch_size=4, shuffle=True, num_workers=os.cpu_count()
+    )
+
+    # Download validation data of CIFAR-10
+    testset = torchvision.datasets.CIFAR10(
+        root="./data", train=False, download=download_flag, transform=transform
+    )
+    testloader = torch.utils.data.DataLoader(
+        testset, batch_size=4, shuffle=False, num_workers=os.cpu_count()
+    )
+
+    # combine as dictionary
+    dataloaders_dict = {"train": trainloader, "val": testloader}
+
+    classes = (
+        "plane",
+        "car",
+        "bird",
+        "cat",
+        "deer",
+        "dog",
+        "frog",
+        "horse",
+        "ship",
+        "truck",
+    )
+
+    writer = SummaryWriter("logs")
+
 
     # Use GPU if there are available resources
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -95,7 +128,9 @@ def train(lr, momentum, num_epochs):
             epoch_corrects = 0
 
             for input_data, label in tqdm(dataloaders_dict[phase]):
-                input_data, label = input_data.to(device), label.to(device) # Enable GPU
+                input_data, label = input_data.to(device), label.to(
+                    device
+                )  # Enable GPU
                 optimizer.zero_grad()
 
                 # compute gradient in training phase
@@ -129,6 +164,19 @@ def train(lr, momentum, num_epochs):
 
     torch.save(net.state_dict(), MODEL_PATH)
 
+def upload_model():
+
+    s3_client = boto3.client("s3")
+    file_path = "model.pth"
+    bucket_name = "cifar10-mlops-bucket"
+    object_key = "model.pth"
+
+    try:
+        s3_client.upload_file(file_path, bucket_name, object_key)
+        print(f"Uploaded {file_path} to {bucket_name}/{object_key}")
+    except ClientError as e:
+        print(f"An error occurred while uploading {e}")
+
 
 def main():
     # Parse command line arguments
@@ -136,10 +184,11 @@ def main():
     parser.add_argument("--lr", type=float, default=0.001, help="learning rate")
     parser.add_argument("--momentum", type=float, default=0.9, help="momentum")
     parser.add_argument("--num_epochs", type=int, default=10, help="number of epochs")
+    parser.add_argument("--env", type=str, default="local", help="executing environment")
     args = parser.parse_args()
 
-    train(lr=args.lr, momentum=args.momentum, num_epochs=args.num_epochs)
-
+    train(lr=args.lr, momentum=args.momentum, num_epochs=args.num_epochs, env=args.env)
+    upload_model()
 
 if __name__ == "__main__":
     main()

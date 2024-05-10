@@ -1,3 +1,6 @@
 venv
 data
 logs
+*.zip
+*.pth
+__pycache__
