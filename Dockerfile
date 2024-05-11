@@ -14,5 +14,6 @@ RUN pip install --upgrade pip && \
 # Make port 80 available to the world outside this container
 EXPOSE 80
 
-# Run model.py when the container launches
-CMD ["python", "main.py"]
+# Run main.py when the container launches
+ENTRYPOINT ["python", "main.py"]
+CMD ["--env" "ecs"]
