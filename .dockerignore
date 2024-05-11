@@ -2,6 +2,7 @@
 .git
 .gitignore
 .gitattributes
+.github/
 
 # CI
 
@@ -20,3 +21,10 @@ venv/
 
 # CIFAR-10 data
 data/
+.zip
+
+# model
+.pth
+
+#logs
+logs/
