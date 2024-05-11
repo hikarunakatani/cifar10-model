@@ -16,4 +16,4 @@ EXPOSE 80
 
 # Run main.py when the container launches
 ENTRYPOINT ["python", "main.py"]
-CMD ["--env" "ecs"]
+CMD ["--env", "ecs"]
