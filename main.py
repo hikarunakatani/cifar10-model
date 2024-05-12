@@ -11,6 +11,7 @@ from torch.utils.tensorboard import SummaryWriter
 import model
 from model import MODEL_PATH
 import boto3
+import botocore
 from botocore.exceptions import ClientError
 import zipfile
 
@@ -26,6 +27,8 @@ def download_data():
     local_file_path = 'data.zip'
     extract_to = './'
 
+    botocore.session.Session().set_debug_logger()
+
     # Download the file from S3
     try:
         s3.download_file(bucket_name, file_key, local_file_path)
@@ -36,7 +39,7 @@ def download_data():
             zip_ref.extractall(extract_to)
             print(f"Zip file extracted successfully to '{extract_to}'.")
 
-    except Exception as e:
+    except ClientError as e:
         print("Error:", e)
 
 
