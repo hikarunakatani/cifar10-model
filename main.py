@@ -10,37 +10,7 @@ from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 import model
 from model import MODEL_PATH
-import boto3
-import botocore
-from botocore.exceptions import ClientError
-import zipfile
-
-
-def download_data():
-    """download training data from Amazon S3 bucket
-       Used when run as a ECS task
-    """
-
-    s3 = boto3.client('s3')
-    bucket_name = 'cifar10-mlops-bucket'
-    file_key = 'data.zip'
-    local_file_path = 'data.zip'
-    extract_to = './'
-
-    botocore.session.Session().set_debug_logger()
-
-    # Download the file from S3
-    try:
-        s3.download_file(bucket_name, file_key, local_file_path)
-        print("File downloaded successfully.")
-
-        # Extract the contents of the zip file
-        with zipfile.ZipFile(local_file_path, 'r') as zip_ref:
-            zip_ref.extractall(extract_to)
-            print(f"Zip file extracted successfully to '{extract_to}'.")
-
-    except ClientError as e:
-        print("Error:", e)
+import aws_action
 
 
 def train(lr, momentum, num_epochs, env):
@@ -61,7 +31,7 @@ def train(lr, momentum, num_epochs, env):
         if env == "local":
             download_flag = True
         elif env == "ecs":
-            download_data()
+            aws_action.download_data()
 
     # Preprocess data
     # Transform PIL Image to tensor
@@ -103,7 +73,6 @@ def train(lr, momentum, num_epochs, env):
     )
 
     writer = SummaryWriter("logs")
-
 
     # Use GPU if there are available resources
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -167,19 +136,6 @@ def train(lr, momentum, num_epochs, env):
 
     torch.save(net.state_dict(), MODEL_PATH)
 
-def upload_model():
-
-    s3_client = boto3.client("s3")
-    file_path = "model.pth"
-    bucket_name = "cifar10-mlops-bucket"
-    object_key = "model.pth"
-
-    try:
-        s3_client.upload_file(file_path, bucket_name, object_key)
-        print(f"Uploaded {file_path} to {bucket_name}/{object_key}")
-    except ClientError as e:
-        print(f"An error occurred while uploading {e}")
-
 
 def main():
     # Parse command line arguments
@@ -187,11 +143,14 @@ def main():
     parser.add_argument("--lr", type=float, default=0.001, help="learning rate")
     parser.add_argument("--momentum", type=float, default=0.9, help="momentum")
     parser.add_argument("--num_epochs", type=int, default=10, help="number of epochs")
-    parser.add_argument("--env", type=str, default="local", help="executing environment")
+    parser.add_argument(
+        "--env", type=str, default="local", help="executing environment"
+    )
     args = parser.parse_args()
 
     train(lr=args.lr, momentum=args.momentum, num_epochs=args.num_epochs, env=args.env)
-    upload_model()
+    aws_action.upload_model()
+
 
 if __name__ == "__main__":
     main()
