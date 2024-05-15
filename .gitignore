@@ -3,4 +3,5 @@ data
 logs
 *.zip
 *.pth
+*.jpg
 __pycache__

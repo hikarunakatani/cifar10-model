@@ -27,6 +27,7 @@ def train(lr, momentum, num_epochs, env):
     # Dataset directory
     data_dir = "./data"
 
+    # Download training data if it doesn't exist
     if not os.path.exists(os.path.join(data_dir, "cifar-10-batches-py")):
         if env == "local":
             download_flag = True
@@ -56,7 +57,7 @@ def train(lr, momentum, num_epochs, env):
         testset, batch_size=4, shuffle=False, num_workers=os.cpu_count()
     )
 
-    # combine as dictionary
+    # Combine as dictionary
     dataloaders_dict = {"train": trainloader, "val": testloader}
 
     classes = (
@@ -72,12 +73,14 @@ def train(lr, momentum, num_epochs, env):
         "truck",
     )
 
+    # Add logs to Tensorboard
     writer = SummaryWriter("logs")
 
     # Use GPU if there are available resources
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     net = model.CNN().to(device)
 
+    # Load pre-trained model if exists
     if os.path.exists(MODEL_PATH):
         source = torch.load(MODEL_PATH, map_location=lambda storage, loc: storage)
         net.load_state_dict(source)
@@ -105,20 +108,20 @@ def train(lr, momentum, num_epochs, env):
                 )  # Enable GPU
                 optimizer.zero_grad()
 
-                # compute gradient in training phase
+                # Compute gradient in training phase
                 with torch.set_grad_enabled(phase == "train"):
-                    predcted_label = net(input_data)
-                    loss = criterion(predcted_label, label)
-                    _, pred_index = torch.max(predcted_label, axis=0)
+                    predicted_label = net(input_data)
+                    loss = criterion(predicted_label, label)
+                    _, pred_index = torch.max(predicted_label, axis=0)
                     _, label_index = torch.max(label, axis=0)
 
                     if phase == "train":
                         loss.backward()
                         optimizer.step()
 
-                    # update loss summary
+                    # Update loss summary
                     epoch_loss += loss.item() * input_data.size(0)
-                    # update the number of correct prediction
+                    # Update the number of correct prediction
                     epoch_corrects += torch.sum(pred_index == label_index)
 
             # show loss and accuracy for each epoch
@@ -133,7 +136,6 @@ def train(lr, momentum, num_epochs, env):
 
     print("Finished Training")
     writer.close()
-
     torch.save(net.state_dict(), MODEL_PATH)
 
 
